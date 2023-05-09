@@ -28,6 +28,8 @@ Drivers/VL53L0X/platform/src/vl53l0x_platform.o: \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_i2c.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h \
+ ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h \
+ ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h \
  ../Drivers/VL53L0X/core/inc/vl53l0x_api.h \
  ../Drivers/VL53L0X/core/inc/vl53l0x_api_strings.h \
  ../Drivers/VL53L0X/core/inc/vl53l0x_def.h
@@ -59,6 +61,8 @@ Drivers/VL53L0X/platform/src/vl53l0x_platform.o: \
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_i2c.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h:
+../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h:
+../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h:
 ../Drivers/VL53L0X/core/inc/vl53l0x_api.h:
 ../Drivers/VL53L0X/core/inc/vl53l0x_api_strings.h:
 ../Drivers/VL53L0X/core/inc/vl53l0x_def.h:
