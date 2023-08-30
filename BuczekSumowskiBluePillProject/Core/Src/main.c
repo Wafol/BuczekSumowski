@@ -37,13 +37,22 @@ enum Rotation {
 
 enum Side {
 	RIGHT,
-	LEFT
+	LEFT,
+	STRAIGHT,
+	BACK
 };
 
 enum IRSensorPosition {
 	FRONT_RIGHT,
 	FRONT_LEFT,
 	BACK_MIDDLE
+};
+
+enum LaserSensorPosition {
+	RIGHT_SIDE,
+	RIGHT_FRONT,
+	LEFT_SIDE,
+	LEFT_FRONT
 };
 
 enum ActionState {
@@ -66,13 +75,22 @@ enum ActionState {
 #define BIN2_PORT GPIOB
 #define BIN2_PIN GPIO_PIN_14
 
+#define XSHUT_PORT GPIOB
+GPIO_TypeDef *xshut_ports[] = {GPIOB, GPIOA, GPIOA, GPIOA};
+uint16_t xshut_pins[] = {GPIO_PIN_7, GPIO_PIN_7, GPIO_PIN_5, GPIO_PIN_6};
+//#define XSHUT_RIGHT_SIDE_PIN GPIO_PIN_4
+//#define XSHUT_RIGHT_FRONT_PIN GPIO_PIN_5
+//#define XSHUT_LEFT_SIDE_PIN GPIO_PIN_6
+//#define XSHUT_LEFT_FRONT_PIN GPIO_PIN_7
 
-#define IR_FRONT_RIGHT_PORT
-#define IR_FRONT_RIGHT_PIN
-#define IR_FRONT_LEFT_PORT
-#define IR_FRONT_LEFT_PIN
-#define IR_BACK_MIDDLE_PORT
-#define IR_BACK_MIDDLE_PIN
+#define IR_FRONT_RIGHT_PORT GPIOA
+#define IR_FRONT_RIGHT_PIN GPIO_PIN_11
+#define IR_FRONT_LEFT_PORT GPIOA
+#define IR_FRONT_LEFT_PIN GPIO_PIN_12
+#define IR_BACK_MIDDLE_PORT GPIOA
+#define IR_BACK_MIDDLE_PIN GPIO_PIN_15
+
+
 
 /* USER CODE END PD */
 
@@ -105,18 +123,51 @@ void initLasers();
 /* USER CODE BEGIN 0 */
 
 VL53L0X_RangingMeasurementData_t RangingData;
-VL53L0X_Dev_t vl53l0x_c; // center module
-VL53L0X_DEV Dev = &vl53l0x_c;
+VL53L0X_Dev_t vl53l0xs[4];
+VL53L0X_DEV laser_devs[] = {&vl53l0xs[0], &vl53l0xs[1], &vl53l0xs[2], &vl53l0xs[3]};
 
-uint16_t measument;
-
-int i;
 
 enum ActionState action_state;
 
+uint16_t laser_values[4];
+bool ir_values[3];
+
+uint16_t readLaserSensor(enum LaserSensorPosition laser_pos) {
+	//VL53L0X_RangingMeasurementData_t RangingData;
+	VL53L0X_PerformSingleRangingMeasurement(laser_devs[laser_pos], &RangingData);
+
+	//while (RangingData.RangeStatus != 0)
+	//	VL53L0X_PerformSingleRangingMeasurement(laser_devs[laser_pos], &RangingData);
+
+	return RangingData.RangeMilliMeter;
+}
+void readFromAllLasers() {
+	laser_values[RIGHT_SIDE] = readLaserSensor(RIGHT_SIDE);
+	laser_values[RIGHT_FRONT] = readLaserSensor(RIGHT_FRONT);
+	laser_values[LEFT_SIDE] = readLaserSensor(LEFT_SIDE);
+	laser_values[LEFT_FRONT] = readLaserSensor(LEFT_FRONT);
+}
+
+bool readIRSensor(enum IRSensorPosition ir_sensor_pos) {
+	switch (ir_sensor_pos) {
+		case FRONT_RIGHT:
+			return HAL_GPIO_ReadPin(IR_FRONT_RIGHT_PORT, IR_FRONT_RIGHT_PIN);
+		case FRONT_LEFT:
+			return HAL_GPIO_ReadPin(IR_FRONT_LEFT_PORT, IR_FRONT_LEFT_PIN);
+		case BACK_MIDDLE:
+			return HAL_GPIO_ReadPin(IR_BACK_MIDDLE_PORT, IR_BACK_MIDDLE_PIN);
+	}
+
+	return false;
+}
+void readFromAllIRs() {
+	ir_values[FRONT_RIGHT] = readIRSensor(FRONT_RIGHT);
+	ir_values[FRONT_LEFT] = readIRSensor(FRONT_LEFT);
+	ir_values[BACK_MIDDLE] = readIRSensor(BACK_MIDDLE);
+}
 
 //speed = 0 to 255
-void runMotor(enum Side motor_side, enum Rotation rot, uint8_t speed) {\
+void runMotor(enum Side motor_side, enum Rotation rot, uint8_t speed) {
   GPIO_TypeDef *controll_port1;
   int controll_pin1;
   GPIO_TypeDef *controll_port2;
@@ -156,10 +207,31 @@ void runMotor(enum Side motor_side, enum Rotation rot, uint8_t speed) {\
   *pwm_channel = converted_speed;
 
 }
-
-bool readLineSensor(enum IRSensorPosition ir_sensor_pos) {
-	return true;
+void goDirection(enum Side side, uint8_t speed) {
+  switch (side) {
+    case RIGHT:
+      runMotor(RIGHT, COUNTER_CLOCKWISE, speed);
+      runMotor(LEFT, COUNTER_CLOCKWISE, speed);
+      break;
+    case LEFT:
+      runMotor(RIGHT, CLOCKWISE, speed);
+      runMotor(LEFT, CLOCKWISE, speed);
+      break;
+    case STRAIGHT:
+      runMotor(RIGHT, CLOCKWISE, speed);
+      runMotor(LEFT, COUNTER_CLOCKWISE, speed);
+      break;
+    case BACK:
+      runMotor(RIGHT, COUNTER_CLOCKWISE, speed);
+      runMotor(LEFT, CLOCKWISE, speed);
+      break;
+  }
 }
+
+
+uint16_t value1;
+uint16_t value2;
+uint16_t value3;
 
 
 /* USER CODE END 0 */
@@ -202,40 +274,54 @@ int main(void)
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
 	//HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-	  /*HAL_GPIO_WritePin(AIN1_PORT, AIN1_PIN, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(AIN2_PORT, AIN2_PIN, GPIO_PIN_RESET);
+  while (1) {
+		//HAL_GPIO_WritePin(xshut_ports[LEFT_SIDE], xshut_pins[LEFT_SIDE], GPIO_PIN_RESET);
+	  //value1 = readLaserSensor(LEFT_FRONT);
+	  //HAL_GPIO_WritePin(XSHUT_PORT, XSHUT_RIGHT_SIDE_PIN, GPIO_PIN_RESET);
+	  //HAL_GPIO_WritePin(XSHUT_PORT, XSHUT_RIGHT_FRONT_PIN, GPIO_PIN_RESET);
 
-	  HAL_GPIO_WritePin(BIN1_PORT, BIN1_PIN, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(BIN2_PORT, BIN2_PIN, GPIO_PIN_RESET);
+	  //HAL_GPIO_WritePin(XSHUT_PORT, XSHUT_LEFT_SIDE_PIN, GPIO_PIN_RESET);
+	  //HAL_GPIO_WritePin(XSHUT_PORT, XSHUT_LEFT_FRONT_PIN, GPIO_PIN_RESET);
 
-	  TIM1->CCR2 = 65535; //ch 2 - pwma
-*/
 
-	  runMotor(RIGHT, CLOCKWISE, 100);
-	  runMotor(LEFT, CLOCKWISE, 100);
-	  HAL_Delay(500);
 
-	  /*VL53L0X_PerformSingleRangingMeasurement(Dev, &RangingData);
+	//VL53L0X_PerformSingleRangingMeasurement(laser_devs[RIGHT_SIDE], &RangingData);
 
-	  if(RangingData.RangeStatus == 0)
-	  {
-		  measument = RangingData.RangeMilliMeter;
-		  i++;
-		  //MessageLen = sprintf((char*)Message, "Measured distance: %i\n\r", RangingData.RangeMilliMeter);
-		  //HAL_UART_Transmit(&huart2, Message, MessageLen, 100);
+	//while (RangingData.RangeStatus != 0)
+		//VL53L0X_PerformSingleRangingMeasurement(laser_devs[LEFT_FRONT], &RangingData);
+	//value1 = readLaserSensor(LEFT_SIDE);
+	//value1 = RangingData.RangeMilliMeter;
+
+	  //readFromAllLasers();
+	//VL53L0X_PerformSingleRangingMeasurement(laser_devs[RIGHT_FRONT], &RangingData);
+
+		//while (RangingData.RangeStatus != 0)
+		//	VL53L0X_PerformSingleRangingMeasurement(laser_devs[LEFT_SIDE], &RangingData);
+
+		//value2 = RangingData.RangeMilliMeter;
+	  //value = readLaserSensor(LEFT_FRONT);
+	  readFromAllLasers();
+	  //readFromAllIRs();
+
+		//VL53L0X_PerformSingleRangingMeasurement(laser_devs[LEFT_FRONT], &RangingData);
+
+		//value3 = RangingData.RangeMilliMeter;
+	  /*value = readLaserSensor(RIGHT_SIDE);
+
+	  if (action_state == FIND) {
+
+	  } else if (action_state == ATTACK) {
+
 	  }*/
-
-
     /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
   }
+    /* USER CODE BEGIN 3 */
+
   /* USER CODE END 3 */
 }
 
@@ -399,18 +485,18 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_4
-                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_4
+                          |GPIO_PIN_7, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
@@ -419,6 +505,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : PA5 PA6 PA7 PA8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pins : PB10 PB11 PB12 PB3 */
   GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_3;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -426,20 +519,13 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB13 PB14 PB15 PB4
-                           PB5 PB6 PB7 */
+                           PB7 */
   GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_4
-                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7;
+                          |GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PA8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA11 PA12 PA15 */
   GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_15;
@@ -451,45 +537,54 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+uint32_t refSpadCount;
+uint8_t isApertureSpads;
+uint8_t VhvSettings;
+uint8_t PhaseCal;
+
 void initLasers() {
+	HAL_GPIO_WritePin(xshut_ports[RIGHT_SIDE], xshut_pins[RIGHT_SIDE], GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(xshut_ports[RIGHT_FRONT], xshut_pins[RIGHT_FRONT], GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(xshut_ports[LEFT_SIDE], xshut_pins[LEFT_SIDE], GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(xshut_ports[LEFT_FRONT], xshut_pins[LEFT_FRONT], GPIO_PIN_RESET);
 
-	//
-	// VL53L0X initialization stuff
-	//
-	uint32_t refSpadCount;
-	uint8_t isApertureSpads;
-	uint8_t VhvSettings;
-	uint8_t PhaseCal;
-	//MessageLen = sprintf((char*)Message, "msalamon.pl VL53L0X test\n\r");
-	//HAL_UART_Transmit(&huart2, Message, MessageLen, 100);
+	uint8_t new_addresses[] = { 0x62, 0x64, 0x66, 0x68 };
 
-	Dev->I2cHandle = &hi2c1;
-	Dev->I2cDevAddr = 0x52;
+	for (int dev_ind = 0; dev_ind < 4; dev_ind++) { //RIGHT_SIDE, RIGHT_FRONT, LEFT_SIDE, LEFT_FRONT
+		laser_devs[dev_ind]->I2cHandle = &hi2c1;
+		laser_devs[dev_ind]->I2cDevAddr = 0x52;
 
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET); // Disable XSHUT
-	HAL_Delay(100);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET); // Enable XSHUT
-	HAL_Delay(100);
+		HAL_GPIO_WritePin(xshut_ports[dev_ind], xshut_pins[dev_ind], GPIO_PIN_RESET); // Disable XSHUT
+		HAL_Delay(20);
+		HAL_GPIO_WritePin(xshut_ports[dev_ind], xshut_pins[dev_ind], GPIO_PIN_SET); // Enable XSHUT
+		HAL_Delay(20);
 
-	//
-	// VL53L0X init for Single Measurement
-	//
+		//HAL_GPIO_WritePin(xshut_ports[LEFT_SIDE], xshut_pins[LEFT_SIDE], GPIO_PIN_RESET);
+		//
+		// VL53L0X init for Single Measurement
+		//
 
-	VL53L0X_WaitDeviceBooted( Dev );
-	VL53L0X_DataInit( Dev );
-	VL53L0X_StaticInit( Dev);
-	VL53L0X_PerformRefCalibration(Dev, &VhvSettings, &PhaseCal);
-	VL53L0X_PerformRefSpadManagement(Dev, &refSpadCount, &isApertureSpads);
-	VL53L0X_SetDeviceMode(Dev, VL53L0X_DEVICEMODE_SINGLE_RANGING);
+		VL53L0X_WaitDeviceBooted( laser_devs[dev_ind] );
+		VL53L0X_DataInit( laser_devs[dev_ind] );
+		VL53L0X_StaticInit( laser_devs[dev_ind]);
+		VL53L0X_PerformRefCalibration(laser_devs[dev_ind], &VhvSettings, &PhaseCal);
+		VL53L0X_PerformRefSpadManagement(laser_devs[dev_ind], &refSpadCount, &isApertureSpads);
+		VL53L0X_SetDeviceMode(laser_devs[dev_ind], VL53L0X_DEVICEMODE_SINGLE_RANGING);
 
-	// Enable/Disable Sigma and Signal check
-	VL53L0X_SetLimitCheckEnable(Dev, VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, 1);
-	VL53L0X_SetLimitCheckEnable(Dev, VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, 1);
-	VL53L0X_SetLimitCheckValue(Dev, VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, (FixPoint1616_t)(0.1*65536));
-	VL53L0X_SetLimitCheckValue(Dev, VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, (FixPoint1616_t)(60*65536));
-	VL53L0X_SetMeasurementTimingBudgetMicroSeconds(Dev, 33000);
-	VL53L0X_SetVcselPulsePeriod(Dev, VL53L0X_VCSEL_PERIOD_PRE_RANGE, 18);
-	VL53L0X_SetVcselPulsePeriod(Dev, VL53L0X_VCSEL_PERIOD_FINAL_RANGE, 14);
+		// Enable/Disable Sigma and Signal check
+		VL53L0X_SetLimitCheckEnable(laser_devs[dev_ind], VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, 1);
+		VL53L0X_SetLimitCheckEnable(laser_devs[dev_ind], VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, 1);
+		VL53L0X_SetLimitCheckValue(laser_devs[dev_ind], VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, (FixPoint1616_t)(0.1*65536));
+		VL53L0X_SetLimitCheckValue(laser_devs[dev_ind], VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, (FixPoint1616_t)(60*65536));
+		VL53L0X_SetMeasurementTimingBudgetMicroSeconds(laser_devs[dev_ind], 33000);
+		VL53L0X_SetVcselPulsePeriod(laser_devs[dev_ind], VL53L0X_VCSEL_PERIOD_PRE_RANGE, 18);
+		VL53L0X_SetVcselPulsePeriod(laser_devs[dev_ind], VL53L0X_VCSEL_PERIOD_FINAL_RANGE, 14);
+
+		VL53L0X_SetDeviceAddress(laser_devs[dev_ind], new_addresses[dev_ind]);
+		laser_devs[dev_ind]->I2cDevAddr = new_addresses[dev_ind];
+	}
+
+
 }
 
 /* USER CODE END 4 */
