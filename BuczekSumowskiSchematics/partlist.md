@@ -12,7 +12,7 @@ senzory barvy a prislusenstvi:
     4x resistor 100R =NEMAM=
 
 motor driver:
-    1x POLOLU-713 =MAM= (https://www.tme.eu/cz/details/pololu-713/modulove-ovladace-motoru/pololu/?brutto=1&currency=CZK&gad_source=1&gclid=CjwKCAiAuYuvBhApEiwAzq_YiW_RhtdyhLBs37RXjuUzPosi5mY6CKzC3tCaBZncbm_zSW5wKmUErBoCn40QAvD_BwE)
+    1x POLOLU-713 =MAM= (https://www.pololu.com/product/713)
 
 starter modul:
     1x DOUFAM ZE NAM DAJI NA MISTE =NEMAM= (https://p1r.se/startmodule/)
